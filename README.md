@@ -14,7 +14,11 @@ js leave maybe
 
 sybau 🥀 - Supreme Coxswain
 
-Language - Captain America
+Language - Captain America (Age of Ultron 1:52) 
+
+WOOOOOOO IM BOUTTA MAKE A NAME FOR MYSELF HERE - Gambit (Deadpool and Wolverine 1 hr 4:45)
+
+
 
 <h1>he's right yknow - B.S.J.</h1>
 
