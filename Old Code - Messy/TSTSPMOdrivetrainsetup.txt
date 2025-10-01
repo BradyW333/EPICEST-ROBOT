@@ -1,0 +1,2 @@
+drivetrain_left_side_speed = controller_1.axis3.position()*2 - controller_1.axis1.position()/2
+drivetrain_right_side_speed = controller_1.axis3.position() + controller_1.axis1.position()/2
