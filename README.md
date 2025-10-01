@@ -12,7 +12,7 @@ js leave maybe
 
 </3 - Albert
 
-sybau 🥀 - Janis
+sybau 🥀 - Supreme Coxswain
 
 Language - Captain America
 
