@@ -22,6 +22,8 @@ WOOOOOOO IM BOUTTA MAKE A NAME FOR MYSELF HERE - Gambit (Deadpool and Wolverine 
 
 <h1>he's right yknow - B.S.J.</h1>
 
+<h1>supreme leader boss here, i don't condone this also please dont use the fuckass final final final ass names from last year pretty please</h1>
+
 
 
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
