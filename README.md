@@ -12,6 +12,8 @@ js leave maybe
 
 </3 - Albert
 
+(also if you lost to us...js retire atp)
+
 sybau 🥀 - Supreme Coxswain
 
 Language - Captain America (Age of Ultron 1:52) 
