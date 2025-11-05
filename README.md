@@ -12,6 +12,8 @@ js leave maybe
 
 </3 - Albert
 
+(also if you lost to us...js retire atp)
+
 sybau 🥀 - Supreme Coxswain
 
 Language - Captain America (Age of Ultron 1:52) 
@@ -23,6 +25,8 @@ WOOOOOOO IM BOUTTA MAKE A NAME FOR MYSELF HERE - Gambit (Deadpool and Wolverine 
 <h1>he's right yknow - B.S.J.</h1>
 
 <h1>supreme leader boss here, i don't condone this also please dont use the fuckass final final final ass names from last year pretty please P.S. I messed up freddy fartbear somehow so u got that twin</h1>
+
+<h3><span style="color:blue">it's ok greedy fatbear looks normal on the main github homepage so it's chill twin<span/></h3>
 
 
 
@@ -70,3 +74,9 @@ WOOOOOOO IM BOUTTA MAKE A NAME FOR MYSELF HERE - Gambit (Deadpool and Wolverine 
 ⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣷⣾⣯⣸⣿⣿⡿⢉⣀⢹⣿⣿⣧⣾⣿⣯⣽⣿⣿⣿⠇⠉⣿⣧⣦⣱⡵⣆⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠸⢿⣿⣿⣿⣿⣿⣿⡺⢼⣿⣿⣗⡊⣘⣹⡛⢋⣿⣿⣟⠪⢻⣿⣿⣿⠂⠧⣽⣿⣧⠁⠀⣟⡄⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠉⠉⠛⠓⠒⠒⠚⠁⠈⠛⠻⠧⠤⠛⠛⠿⠯⠿⠬⠞⠛⠻⠭⠝⠓⠂⠀⠀⠀⠀⠀
+
+
+
+look at our tuff mango psyduck logo
+
+<image src=img.png>
