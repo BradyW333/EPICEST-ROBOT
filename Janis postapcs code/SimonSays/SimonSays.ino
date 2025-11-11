@@ -87,46 +87,46 @@ void setup() {
 }
 
 void loop() {
-  if(INTRO_PLAYED == false){
-    if(NEXT_TIME == 0&&NEXT_ACTION == true){
-      float note = NOTES[String(intro[INTROSTEP][0]).toInt()];
-      tone(BUZZ,note);
-      if(strchr(intro[INTROSTEP],"r")!=NULL){
-        digitalWrite(RED_LED, HIGH);
-      }
-      if(strchr(intro[INTROSTEP],"g")!=NULL){
-        digitalWrite(GREEN_LED, HIGH);
-      }
-      if(strchr(intro[INTROSTEP],"b")!=NULL){
-        digitalWrite(BLUE_LED, HIGH);
-      }
-      if(strchr(intro[INTROSTEP],"y")!=NULL){
-        digitalWrite(YELLOW_LED, HIGH);
-      }
-      NEXT_TIME = millis()+INTROLEN;
-      NEXT_ACTION = false;
+  // if(INTRO_PLAYED == false){
+  //   if(NEXT_TIME == 0&&NEXT_ACTION == true){
+  //     float note = NOTES[String(intro[INTROSTEP][0]).toInt()];
+  //     tone(BUZZ,note);
+  //     if(strchr(intro[INTROSTEP],"r")!=NULL){
+  //       digitalWrite(RED_LED, HIGH);
+  //     }
+  //     if(strchr(intro[INTROSTEP],"g")!=NULL){
+  //       digitalWrite(GREEN_LED, HIGH);
+  //     }
+  //     if(strchr(intro[INTROSTEP],"b")!=NULL){
+  //       digitalWrite(BLUE_LED, HIGH);
+  //     }
+  //     if(strchr(intro[INTROSTEP],"y")!=NULL){
+  //       digitalWrite(YELLOW_LED, HIGH);
+  //     }
+  //     NEXT_TIME = millis()+INTROLEN;
+  //     NEXT_ACTION = false;
       
-      Serial.println(String(note));
+  //     Serial.println(String(note));
 
 
-    }
-    if(NEXT_TIME < millis()){
-      if(NEXT_ACTION == false){
-        noTone(BUZZ);
-        off();
-        NEXT_TIME = millis()+INTROPAUSE;
-        NEXT_ACTION = true;
-      } else {
+  //   }
+  //   if(NEXT_TIME < millis()){
+  //     if(NEXT_ACTION == false){
+  //       noTone(BUZZ);
+  //       off();
+  //       NEXT_TIME = millis()+INTROPAUSE;
+  //       NEXT_ACTION = true;
+  //     } else {
         
-        NEXT_TIME = 0;
-        INTROSTEP+=1;
-        if(INTROSTEP >= sizeof(intro)/sizeof(intro[0])){
-          INTRO_PLAYED = true;
-        }
-      }
-    }
+  //       NEXT_TIME = 0;
+  //       INTROSTEP+=1;
+  //       if(INTROSTEP >= sizeof(intro)/sizeof(intro[0])){
+  //         INTRO_PLAYED = true;
+  //       }
+  //     }
+  //   }
 
-  }
+  // }
 
   // if(YBUTT==0){
   //   Serial.println("YBUTT");
