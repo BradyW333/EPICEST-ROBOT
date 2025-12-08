@@ -1,0 +1,18 @@
+<SC6> An Autonomous Win Point is awarded to any Alliance that ends the Autonomous Period with all of the following tasks completed, and that has committed no Violations during the Autonomous Period:
+
+At least seven (7) Blocks of the Alliance’s color are Scored.
+At least three (3) different Goals include at least one (1) Scored Block of the Alliance’s color.
+At least three (3) Blocks of the Alliance’s color have been removed from Loaders adjacent to the Alliance’s Alliance Station.
+Neither Robot is contacting the Park Zone barrier.
+
+<T5> Be prepared for minor Field variance. Field Element tolerances and Blocks may vary from specified
+locations/dimensions; Teams are encouraged to design their Robots accordingly. Please make sure to check
+Appendix A for more specific nominal dimensions and tolerances.
+a. Field Element tolerances may vary from nominal by up to ±1.0”.
+b. Block placement at the beginning of the Match may vary from nominal by up to ±1” (25.4mm). If a Block is
+within tolerance, either on the Field or within a Loader, it should not be adjusted before the Match.
+c. Goal Heights may vary from nominal by up to ±1” (25.4mm).
+d. Block weight may vary by up to ± 4g
+e. The rotation of Blocks is not specified. If a Block is within tolerance, either on the Field or within a Loader,
+it should not be adjusted before the Match.
+f. Placement of Control Zone tape lines on the Long Goals may vary from nominal by up to ± 0.25”
