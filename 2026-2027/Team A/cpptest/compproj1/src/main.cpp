@@ -4,17 +4,26 @@
 #include "pros/misc.h"
 #include "pros/motors.h"
 
- //motor groups
-pros::Motor front_left_motor(-8, pros::E_MOTOR_GEAR_BLUE); 
-pros::Motor middle_left_motor(9, pros::E_MOTOR_GEAR_BLUE); // 5.5W For
-pros::Motor back_left_motor(-10, pros::E_MOTOR_GEAR_BLUE); 
+//drivetrain motor groups
+pros::Motor front_left_motor(-12, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor back_left_motor(-11, pros::E_MOTOR_GEAR_BLUE); 
 
-pros::Motor front_right_motor(1, pros::E_MOTOR_GEAR_BLUE); 
-pros::Motor middle_right_motor(-2, pros::E_MOTOR_GEAR_BLUE); // 5.5W Rev
-pros::Motor back_right_motor(3, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor front_right_motor(19, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor back_right_motor(20, pros::E_MOTOR_GEAR_BLUE); 
 
-pros::MotorGroup left_motors({front_left_motor, front_right_motor, middle_left_motor}); // left motors on ports 1 (Front reversed), 2 (5.5W forwards), and 3 (Back reversed)
-pros::MotorGroup right_motors({front_left_motor, front_right_motor, middle_left_motor}); // right motors on ports 4 (forwards), 5 (5.5W reversed), and 6 (Back forwards)
+pros::MotorGroup left_motors({front_left_motor, front_right_motor}); // left motors on ports 1 (Front reversed), 2 (5.5W forwards), and 3 (Back reversed)
+pros::MotorGroup right_motors({front_left_motor, front_right_motor}); // right motors on ports 4 (forwards), 5 (5.5W reversed), and 6 (Back forwards)
+
+//Cascade motor group
+pros::Motor left_cascade_motor(-2, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor right_cascade_motor(10, pros::E_MOTOR_GEAR_BLUE); 
+
+//intake and banshee claw
+pros::Motor intake_motor(3,pros::E_MOTOR_GEAR_BLUE);
+
+pros::Motor banshee_lift(1,pros::E_MOTOR_GEAR_BLUE); //5.5v
+
+pros::Motor banshee_claw(4,pros::E_MOTOR_GEAR_BLUE); //5.5v
 
 //drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motors, // left motor group
