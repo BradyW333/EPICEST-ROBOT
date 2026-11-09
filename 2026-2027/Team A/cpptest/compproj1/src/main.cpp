@@ -2,7 +2,13 @@
 #include "lemlib/api.hpp" // IWYU pragma: keep
 #include "lemlib/chassis/trackingWheel.hpp"
 #include "pros/misc.h"
+#include "pros/misc.hpp"
 #include "pros/motors.h"
+#include <string>
+
+//vars
+bool pid_cal_driving = false;
+bool pid_cal_lat = true; //true lat ang false
 
 //drivetrain motor groups
 pros::Motor front_left_motor(-12, pros::E_MOTOR_GEAR_BLUE); 
@@ -25,6 +31,9 @@ pros::Motor banshee_lift(1,pros::E_MOTOR_GEAR_BLUE); //5.5v
 
 pros::Motor banshee_claw(4,pros::E_MOTOR_GEAR_BLUE); //5.5v
 
+//controller
+pros::Controller controller(pros::E_CONTROLLER_MASTER);
+
 //drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motors, // left motor group
                               &right_motors, // right motor group
@@ -43,8 +52,9 @@ pros::Imu imu(20);
 //pros::adi::Encoder horizontal_encoder('C', 'D');//create an optical shaft encoder connected to ports 'C' and 'D'
 
 pros::Rotation vertical_sensor(13);
-pros::Rotation horizontal_sensor(-4);
 
+//pros::Distance vertical_distance(1);
+//pros::Distance horizontal_distance(1);
 //test for reversal
 /**
 void initialize() {
@@ -57,15 +67,15 @@ void initialize() {
     }
 }*/
 
-//horizontal tracking wheel (tune distances relative to center)
-lemlib::TrackingWheel horizontal_tracking_wheel(&horizontal_sensor, lemlib::Omniwheel::NEW_2, -1.75); //NEED TO CONFIGURE TS!@!!
+
+
 //vertical tracking wheel
-lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.875); //NEED TO CONFIGURE TS!@!!
+lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.875); //NEED TO CONFIGURE DISTANCE!@!!
 
 //odom settings
 lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel 1, set to null
                             nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
-                            &horizontal_tracking_wheel, // horizontal tracking wheel 1
+                            nullptr, // horizontal tracking wheel 1, set to nullptr as we don't have a second one
                             nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
                             &imu // inertial sensor 
 );
@@ -143,22 +153,170 @@ void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
 
-    pros::Task screen_task([]() {
+    // pros::Task screen_task([]() {
+    //     while (true) {
+    //         const lemlib::Pose pose = chassis.getPose();
+    //         const double target = 90.0;
+
+    //         // Wrap error into approximately -180 to +180 degrees
+    //         double error = target - pose.theta;
+    //         while (error > 180) error -= 360;
+    //         while (error < -180) error += 360;
+
+    //         pros::lcd::print(0, "X: %.2f", pose.x);
+    //         pros::lcd::print(1, "Y: %.2f", pose.y);
+    //         pros::lcd::print(2, "Theta: %.2f", pose.theta);
+    //         pros::lcd::print(3, "Error: %.2f", error);
+
+    //         pros::delay(50);
+    //     }
+    // });
+    // pros::Task drive([]() {
+    //     while (true) {
+    //         // get left y and right x positions
+    //         int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+    //         int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+    //         int rightBut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+    //         // move the robot
+    //         if(abs(leftY)<4 | rightBut==1 ){
+    //             chassis.arcade(leftY, rightX);
+    //         } else {
+    //             chassis.curvature(leftY, rightX);
+    //         }
+            
+
+    //         // delay to save resources
+    //         pros::delay(25);
+    //     }
+    // });
+    pros::Task pid_calibrate([]() {
+        bool pid_cal_lat = false;
+        bool pid_cal_kp = true;
+        double angkP = 2;
+        double angkD = 10;
+        double latkP = 2;
+        double latkD = 10;
+
+        bool testing = false;
+        bool dirty = true;
+        uint32_t last_print = 0;
+        uint32_t test_start = 0;
+        uint32_t settled_since = 0;
+        lemlib::Pose start(0, 0, 0);
+        double lat_prev = 0;
+        double ang_prev = 0;
+        double overshoot = 0;
+        double last_settle = 0;
+        double last_overshoot = 0;
+
+        auto wrap = [](double e) {
+            while (e > 180) e -= 360;
+            while (e < -180) e += 360;
+            return e;
+        };
+        auto clamp127 = [](double v) { return std::clamp(v, -127.0, 127.0); };
+
         while (true) {
             const lemlib::Pose pose = chassis.getPose();
-            const double target = 90.0;
+            const uint32_t now = pros::millis();
 
-            // Wrap error into approximately -180 to +180 degrees
-            double error = target - pose.theta;
-            while (error > 180) error -= 360;
-            while (error < -180) error += 360;
+            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT) && !testing) {
+                pid_cal_lat = !pid_cal_lat;
+                dirty = true;
+            }
+            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
+                pid_cal_kp = !pid_cal_kp;
+                dirty = true;
+            }
+            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP) ||
+                controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+                const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
+                double& gain = pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD);
+                gain = std::max(0.0, gain + dir * (pid_cal_kp ? 0.5 : 1.0));
+                dirty = true;
+            }
+            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {
+                testing = true;
+                start = pose;
+                test_start = now;
+                settled_since = 0;
+                overshoot = 0;
+                lat_prev = pid_cal_lat ? 24 : 0;
+                ang_prev = pid_cal_lat ? 0 : 90;
+            }
+            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && testing) {
+                testing = false;
+                chassis.arcade(0, 0, true);
+            }
 
-            pros::lcd::print(0, "X: %.2f", pose.x);
-            pros::lcd::print(1, "Y: %.2f", pose.y);
-            pros::lcd::print(2, "Theta: %.2f", pose.theta);
-            pros::lcd::print(3, "Error: %.2f", error);
+            double lat_err = 0;
+            double ang_err = 0;
 
-            pros::delay(50);
+            if (testing) {
+                const double h = start.theta * M_PI / 180.0;
+                if (pid_cal_lat) {
+                    const double tx = start.x + 24 * std::sin(h);
+                    const double ty = start.y + 24 * std::cos(h);
+                    lat_err = (tx - pose.x) * std::sin(h) + (ty - pose.y) * std::cos(h);
+                    ang_err = wrap(start.theta - pose.theta);
+                } else {
+                    ang_err = wrap(start.theta + 90 - pose.theta);
+                }
+
+                const double fwd = pid_cal_lat ? clamp127(latkP * lat_err + latkD * (lat_err - lat_prev)) : 0;
+                const double turn = clamp127(angkP * ang_err + angkD * (ang_err - ang_prev));
+                lat_prev = lat_err;
+                ang_prev = ang_err;
+                chassis.arcade(fwd, turn, true);
+
+                const double primary = pid_cal_lat ? lat_err : ang_err;
+                overshoot = std::max(overshoot, -primary);
+
+                bool done = false;
+                if (std::fabs(primary) < 1) {
+                    if (settled_since == 0) settled_since = now;
+                    if (now - settled_since >= 100) {
+                        last_settle = settled_since - test_start;
+                        done = true;
+                    }
+                } else {
+                    settled_since = 0;
+                }
+                if (now - test_start > 4000) {
+                    last_settle = -1;
+                    done = true;
+                }
+                if (done) {
+                    testing = false;
+                    last_overshoot = overshoot;
+                    chassis.arcade(0, 0, true);
+                    printf("lat kP %.2f kD %.2f | ang kP %.2f kD %.2f | settle %.0f ms overshoot %.2f\n",
+                        latkP, latkD, angkP, angkD, last_settle, last_overshoot);
+                }
+            }
+
+            pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
+            pros::lcd::print(1, "Theta: %.2f", pose.theta);
+            pros::lcd::print(2, "Mode: %s %s", pid_cal_lat ? "LATERAL 24in" : "ANGULAR 90deg", testing ? "(running)" : "");
+            pros::lcd::print(3, "Error: %.2f", pid_cal_lat ? lat_err : ang_err);
+            pros::lcd::print(4, "Lat kP %.2f kD %.2f", latkP, latkD);
+            pros::lcd::print(5, "Ang kP %.2f kD %.2f", angkP, angkD);
+            if (last_settle < 0) {
+                pros::lcd::print(6, "Last: TIMEOUT  overshoot %.2f", last_overshoot);
+            } else {
+                pros::lcd::print(6, "Last: %.0f ms  overshoot %.2f", last_settle, last_overshoot);
+            }
+
+            if (dirty && now - last_print >= 60) {
+                controller.print(0, 0, "%s %s: %.2f      ",
+                                pid_cal_lat ? "Lat" : "Ang",
+                                pid_cal_kp ? "kP" : "kD",
+                                pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD));
+                last_print = now;
+                dirty = false;
+            }
+
+            pros::delay(10);
         }
     });
 }
@@ -218,7 +376,7 @@ void autonomous() {
  */
 
 
-pros::Controller controller(pros::E_CONTROLLER_MASTER);
+
 
 void opcontrol() {
     // loop forever
