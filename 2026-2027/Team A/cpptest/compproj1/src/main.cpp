@@ -5,6 +5,8 @@
 #include "pros/misc.hpp"
 #include "pros/motors.h"
 #include <string>
+#include <algorithm>
+#include <cmath>
 
 //vars
 bool pid_cal_driving = false;
@@ -171,26 +173,99 @@ void initialize() {
     //         pros::delay(50);
     //     }
     // });
-    // pros::Task drive([]() {
-    //     while (true) {
-    //         // get left y and right x positions
-    //         int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-    //         int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-    //         int rightBut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-    //         // move the robot
-    //         if(abs(leftY)<4 | rightBut==1 ){
-    //             chassis.arcade(leftY, rightX);
-    //         } else {
-    //             chassis.curvature(leftY, rightX);
-    //         }
-            
 
-    //         // delay to save resources
-    //         pros::delay(25);
-    //     }
-    // });
-    pros::Task pid_calibrate([]() {
-        bool pid_cal_lat = false;
+}
+
+
+/**
+ * Runs while the robot is in the disabled state of Field Management System or
+ * the VEX Competition Switch, following either autonomous or opcontrol. When
+ * the robot is enabled, this task will exit.
+ */
+void disabled() {}
+
+/**
+ * Runs after initialize(), and before autonomous when connected to the Field
+ * Management System or the VEX Competition Switch. This is intended for
+ * competition-specific initialization routines, such as an autonomous selector
+ * on the LCD.
+ *
+ * This task will exit when the robot is enabled and autonomous or opcontrol
+ * starts.
+ */
+void competition_initialize() {}
+
+/**
+ * Runs the user autonomous code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the autonomous
+ * mode. Alternatively, this function may be called in initialize or opcontrol
+ * for non-competition testing purposes.
+ *
+ * If the robot is disabled or communications is lost, the autonomous task
+ * will be stopped. Re-enabling the robot will restart the task, not re-start it
+ * from where it left off.
+ */
+void autonomous() {
+	//tune angular controller
+    // set position to x:0, y:0, heading:0
+    chassis.setPose(0, 0, 0);
+    // turn to face heading 90 with a very long timeout
+    chassis.turnToHeading(90, 100000);
+
+	
+}
+
+/**
+ * Runs the operator control code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the operator
+ * control mode.
+ *
+ * If no competition control is connected, this function will run immediately
+ * following initialize().
+ *
+ * If the robot is disabled or communications is lost, the
+ * operator control task will be stopped. Re-enabling the robot will restart the
+ * task, not resume it from where it left off.
+ */
+
+
+
+
+void opcontrol() {
+    // loop forever
+    bool intakeon = false;
+    bool intakereverse = false;
+    while (true) {
+        // get left y and right x positions
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+        int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        // move the robot
+        if(abs(leftY)<4 | left2==1 ){
+            chassis.arcade(leftY, rightX);
+        } else {
+            chassis.curvature(leftY, rightX);
+        }
+        
+        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
+            intakeon = !intakeon;
+        }
+
+        intakereverse = right1 == 1;
+
+        intake_motor.move(intakereverse ? -127 : (intakeon ? 127 : 0));
+        // delay to save resources
+        pros::delay(25);
+    }
+}
+
+//pid calibration func 
+void pidcal(){
+    bool pid_cal_lat = false;
         bool pid_cal_kp = true;
         double angkP = 2;
         double angkD = 10;
@@ -318,82 +393,4 @@ void initialize() {
 
             pros::delay(10);
         }
-    });
-}
-
-
-/**
- * Runs while the robot is in the disabled state of Field Management System or
- * the VEX Competition Switch, following either autonomous or opcontrol. When
- * the robot is enabled, this task will exit.
- */
-void disabled() {}
-
-/**
- * Runs after initialize(), and before autonomous when connected to the Field
- * Management System or the VEX Competition Switch. This is intended for
- * competition-specific initialization routines, such as an autonomous selector
- * on the LCD.
- *
- * This task will exit when the robot is enabled and autonomous or opcontrol
- * starts.
- */
-void competition_initialize() {}
-
-/**
- * Runs the user autonomous code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the autonomous
- * mode. Alternatively, this function may be called in initialize or opcontrol
- * for non-competition testing purposes.
- *
- * If the robot is disabled or communications is lost, the autonomous task
- * will be stopped. Re-enabling the robot will restart the task, not re-start it
- * from where it left off.
- */
-void autonomous() {
-	//tune angular controller
-    // set position to x:0, y:0, heading:0
-    chassis.setPose(0, 0, 0);
-    // turn to face heading 90 with a very long timeout
-    chassis.turnToHeading(90, 100000);
-
-	
-}
-
-/**
- * Runs the operator control code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the operator
- * control mode.
- *
- * If no competition control is connected, this function will run immediately
- * following initialize().
- *
- * If the robot is disabled or communications is lost, the
- * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
- */
-
-
-
-
-void opcontrol() {
-    // loop forever
-    while (true) {
-        // get left y and right x positions
-        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-        int rightBut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-        // move the robot
-        if(abs(leftY)<4 | rightBut==1 ){
-            chassis.arcade(leftY, rightX);
-        } else {
-            chassis.curvature(leftY, rightX);
-        }
-        
-
-        // delay to save resources
-        pros::delay(25);
-    }
 }
