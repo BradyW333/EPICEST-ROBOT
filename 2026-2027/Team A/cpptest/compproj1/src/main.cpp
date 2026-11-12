@@ -25,6 +25,7 @@ pros::MotorGroup right_motors({front_left_motor, front_right_motor}); // right m
 //Cascade motor group
 pros::Motor left_cascade_motor(-2, pros::E_MOTOR_GEAR_BLUE); 
 pros::Motor right_cascade_motor(10, pros::E_MOTOR_GEAR_BLUE); 
+pros::MotorGroup cascade_motors({left_cascade_motor, right_cascade_motor});
 
 //intake and banshee claw
 pros::Motor intake_motor(3,pros::E_MOTOR_GEAR_BLUE);
@@ -242,22 +243,34 @@ void opcontrol() {
         int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
         int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
         int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+        int left1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
         int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
         int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
         // move the robot
-        if(abs(leftY)<4 | left2==1 ){
+        if(abs(leftY)<4 || (left1==1&&left2==1)){
             chassis.arcade(leftY, rightX);
         } else {
             chassis.curvature(leftY, rightX);
         }
-        
+        //cascade
+        if(left1==1 && left2==0){
+            cascade_motors.move(127);
+        } else if(left2==0 && left1==1){
+            cascade_motors.move(-127);
+        } else if(left2==0 && left1==0){
+            cascade_motors.brake();
+        }
+
+
+
+        //intake
         if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
             intakeon = !intakeon;
         }
 
         intakereverse = right1 == 1;
 
-        intake_motor.move(intakereverse ? -127 : (intakeon ? 127 : 0));
+        intake_motor.move(intakereverse ? -100 : (intakeon ? 100 : 0));
         // delay to save resources
         pros::delay(25);
     }
