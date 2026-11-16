@@ -1,6 +1,7 @@
 #include "main.h"
 #include "lemlib/api.hpp" // IWYU pragma: keep
 #include "lemlib/chassis/trackingWheel.hpp"
+#include "pros/llemu.hpp"
 #include "pros/misc.h"
 #include "pros/misc.hpp"
 #include "pros/motors.h"
@@ -47,7 +48,7 @@ lemlib::Drivetrain drivetrain(&left_motors, // left motor group
 );//wheelbase is 12"
 
 //imu port on port 20
-pros::Imu imu(20);
+pros::Imu imu(5);
 
 //old encoder code
 //optical shaft encoder odoms (add comma true if reverse)
@@ -87,18 +88,18 @@ lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel
 lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
                                               0, // integral gain (kI)
                                               3, // derivative gain (kD)
-                                              3, // anti windup
-                                              1, // small error range, in inches
-                                              100, // small error range timeout, in milliseconds
-                                              3, // large error range, in inches
-                                              500, // large error range timeout, in milliseconds
-                                              20 // maximum acceleration (slew)
+                                              0, // anti windup
+                                              0, // small error range, in inches
+                                              0, // small error range timeout, in milliseconds
+                                              0, // large error range, in inches
+                                              0, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
 );
 
 // angular PID controller
-lemlib::ControllerSettings angular_controller(12, // proportional gain (kP)
+lemlib::ControllerSettings angular_controller(10, // proportional gain (kP)
                                               0, // integral gain (kI)
-                                              12, // derivative gain (kD)
+                                              3, // derivative gain (kD)
                                               0, // anti windup
                                               0, // small error range, in degrees
                                               0, // small error range timeout, in milliseconds
@@ -127,7 +128,53 @@ lemlib::Chassis chassis(drivetrain, // drivetrain settings
                         &throttle_curve,
                         &steer_curve
 );
+//funcs
+void overtemp() {
+    pros::Task temp_task([]() {
+        struct NamedMotor { const char* name; pros::Motor* motor; };
+        NamedMotor motors[] = {
+            {"FL Drive", &front_left_motor},
+            {"BL Drive", &back_left_motor},
+            {"FR Drive", &front_right_motor},
+            {"BR Drive", &back_right_motor},
+            {"L Cascade", &left_cascade_motor},
+            {"R Cascade", &right_cascade_motor},
+            {"Intake", &intake_motor},
+            {"Ban Lift", &banshee_lift},
+            {"Ban Claw", &banshee_claw},
+        };
+        const double limit = 55;
+        size_t shown = 0;
+        bool was_hot = false;
+        uint32_t last_rumble = 0;
 
+        while (true) {
+            std::vector<std::pair<const char*, double>> hot;
+            for (auto& m : motors) {
+                const double t = m.motor->get_temperature();
+                if (std::isfinite(t) && (t >= limit || m.motor->is_over_temp())) {
+                    hot.push_back({m.name, t});
+                }
+            }
+
+            if (!hot.empty()) {
+                shown = (shown + 1) % hot.size();
+                controller.print(2, 0, "HOT %s %.0fC      ", hot[shown].first, hot[shown].second);
+                was_hot = true;
+                if (pros::millis() - last_rumble >= 3000) {
+                    pros::delay(60);
+                    controller.rumble("- -");
+                    last_rumble = pros::millis();
+                }
+            } else if (was_hot) {
+                controller.clear_line(2);
+                was_hot = false;
+            }
+
+            pros::delay(1000);
+        }
+    });
+}
 /**
  * A callback function for LLEMU's center button.
  *
@@ -155,7 +202,7 @@ void on_center_button() {
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
-
+    overtemp();
     // pros::Task screen_task([]() {
     //     while (true) {
     //         const lemlib::Pose pose = chassis.getPose();
@@ -238,6 +285,7 @@ void opcontrol() {
     // loop forever
     bool intakeon = false;
     bool intakereverse = false;
+    cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
     while (true) {
         // get left y and right x positions
         int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
@@ -247,21 +295,14 @@ void opcontrol() {
         int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
         int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
         // move the robot
-        if(abs(leftY)<4 || (left1==1&&left2==1)){
-            chassis.arcade(leftY, rightX);
-        } else {
-            chassis.curvature(leftY, rightX);
-        }
+        chassis.arcade(leftY, rightX);
+           
         //cascade
-        if(left1==1 && left2==0){
-            cascade_motors.move(127);
-        } else if(left2==0 && left1==1){
-            cascade_motors.move(-127);
-        } else if(left2==0 && left1==0){
-            cascade_motors.brake();
-        }
-
-
+        if (left1 == 1 && left2 == 0) {
+            cascade_motors.move(50);
+        } else if (left2 == 1 && left1 == 0) {
+            cascade_motors.move(-50);
+        } 
 
         //intake
         if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
@@ -407,3 +448,4 @@ void pidcal(){
             pros::delay(10);
         }
 }
+
