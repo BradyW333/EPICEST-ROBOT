@@ -374,7 +374,7 @@ void pidcal(){
                 controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
                 const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
                 double& gain = pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD);
-                gain = std::max(0.0, gain + dir * (pid_cal_kp ? 0.5 : 1.0));
+                gain = std::max(0.0, gain + dir * (0.5));
                 dirty = true;
             }
             if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {

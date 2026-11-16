@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "compproj1.3",
+    "project_name": "funtest",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -352,7 +352,8 @@
     },
     "upload_options": {
       "description": "Greatest program of all time",
-      "icon": "pros"
+      "icon": "pros",
+      "slot": 1
     },
     "use_early_access": false
   }
