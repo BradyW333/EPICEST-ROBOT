@@ -55,7 +55,7 @@ pros::Imu imu(5);
 //pros::adi::Encoder vertical_encoder('A', 'B', true);//create an optical shaft encoder connected to ports 'A' and 'B'
 //pros::adi::Encoder horizontal_encoder('C', 'D');//create an optical shaft encoder connected to ports 'C' and 'D'
 
-pros::Rotation vertical_sensor(13);
+//pros::Rotation vertical_sensor(13);
 
 //pros::Distance vertical_distance(1);
 //pros::Distance horizontal_distance(1);
@@ -74,10 +74,10 @@ void initialize() {
 
 
 //vertical tracking wheel
-lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.875); //NEED TO CONFIGURE DISTANCE!@!!
+//lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.875); //NEED TO CONFIGURE DISTANCE!@!!
 
 //odom settings
-lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel 1, set to null
+lemlib::OdomSensors sensors(nullptr, // vertical tracking wheel 1, set to null
                             nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
                             nullptr, // horizontal tracking wheel 1, set to nullptr as we don't have a second one
                             nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
@@ -202,7 +202,7 @@ void on_center_button() {
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
-    overtemp();
+    //overtemp();
     // pros::Task screen_task([]() {
     //     while (true) {
     //         const lemlib::Pose pose = chassis.getPose();
@@ -285,23 +285,35 @@ void opcontrol() {
     // loop forever
     bool intakeon = false;
     bool intakereverse = false;
-    cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+    
     while (true) {
         // get left y and right x positions
         int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
         int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
         int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
         int left1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
         int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
         int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
         // move the robot
-        chassis.arcade(leftY, rightX);
+        int forward = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+
+        int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        int left = forward + turn;
+        int right = forward - turn;
+
+        left_motors.move(left);
+        right_motors.move(right);
+
            
         //cascade
         if (left1 == 1 && left2 == 0) {
-            cascade_motors.move(50);
+            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+            cascade_motors.move(75);
         } else if (left2 == 1 && left1 == 0) {
-            cascade_motors.move(-50);
+            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+            cascade_motors.brake();
         } 
 
         //intake
