@@ -55,7 +55,7 @@ pros::Imu imu(5);
 //pros::adi::Encoder vertical_encoder('A', 'B', true);//create an optical shaft encoder connected to ports 'A' and 'B'
 //pros::adi::Encoder horizontal_encoder('C', 'D');//create an optical shaft encoder connected to ports 'C' and 'D'
 
-//pros::Rotation vertical_sensor(13);
+pros::Rotation vertical_sensor(18);
 
 //pros::Distance vertical_distance(1);
 //pros::Distance horizontal_distance(1);
@@ -74,10 +74,10 @@ void initialize() {
 
 
 //vertical tracking wheel
-//lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.875); //NEED TO CONFIGURE DISTANCE!@!!
+lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.75); //NEED TO CONFIGURE DISTANCE!@!!
 
 //odom settings
-lemlib::OdomSensors sensors(nullptr, // vertical tracking wheel 1, set to null
+lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel 1, set to null
                             nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
                             nullptr, // horizontal tracking wheel 1, set to nullptr as we don't have a second one
                             nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
@@ -279,186 +279,204 @@ void autonomous() {
  */
 
 
+void pidcal() {
+    bool pid_cal_lat = false;
+    bool pid_cal_kp = true;
+    double angkP = 2;
+    double angkD = 10;
+    double latkP = 2;
+    double latkD = 10;
+
+    const double lat_dist = 24;
+    const double ang_dist = 90;
+
+    bool testing = false;
+    int leg = 0;
+    bool dirty = true;
+    uint32_t last_print = 0;
+    uint32_t leg_start = 0;
+    uint32_t settled_since = 0;
+    lemlib::Pose start(0, 0, 0);
+    double lat_prev = 0;
+    double ang_prev = 0;
+    double overshoot = 0;
+    double out_settle = 0;
+    double back_settle = 0;
+    double last_overshoot = 0;
+
+    auto wrap = [](double e) {
+        while (e > 180) e -= 360;
+        while (e < -180) e += 360;
+        return e;
+    };
+    auto clamp127 = [](double v) { return std::clamp(v, -127.0, 127.0); };
+
+    while (true) {
+        const lemlib::Pose pose = chassis.getPose();
+        const uint32_t now = pros::millis();
+
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT) && !testing) {
+            pid_cal_lat = !pid_cal_lat;
+            dirty = true;
+        }
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
+            pid_cal_kp = !pid_cal_kp;
+            dirty = true;
+        }
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP) ||
+            controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+            const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
+            double& gain = pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD);
+            gain = std::max(0.0, gain + dir * (pid_cal_kp ? 0.5 : 1.0));
+            dirty = true;
+        }
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {
+            testing = true;
+            leg = 0;
+            start = pose;
+            leg_start = now;
+            settled_since = 0;
+            overshoot = 0;
+            out_settle = 0;
+            back_settle = 0;
+            lat_prev = pid_cal_lat ? lat_dist : 0;
+            ang_prev = pid_cal_lat ? 0 : ang_dist;
+        }
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && testing) {
+            testing = false;
+            chassis.arcade(0, 0, true);
+        }
+
+        double lat_err = 0;
+        double ang_err = 0;
+
+        if (testing) {
+            const double h = start.theta * M_PI / 180.0;
+            if (pid_cal_lat) {
+                const double travelled = (pose.x - start.x) * std::sin(h) + (pose.y - start.y) * std::cos(h);
+                lat_err = (leg == 0 ? lat_dist : 0) - travelled;
+                ang_err = wrap(start.theta - pose.theta);
+            } else {
+                ang_err = wrap(start.theta + (leg == 0 ? ang_dist : 0) - pose.theta);
+            }
+
+            const double fwd = pid_cal_lat ? clamp127(latkP * lat_err + latkD * (lat_err - lat_prev)) : 0;
+            const double turn = clamp127(angkP * ang_err + angkD * (ang_err - ang_prev));
+            lat_prev = lat_err;
+            ang_prev = ang_err;
+            chassis.arcade(fwd, turn, true);
+
+            const double primary = pid_cal_lat ? lat_err : ang_err;
+            const double leg_dir = leg == 0 ? 1 : -1;
+            overshoot = std::max(overshoot, -primary * leg_dir);
+
+            bool done = false;
+            if (std::fabs(primary) < 1) {
+                if (settled_since == 0) settled_since = now;
+                if (now - settled_since >= 100) {
+                    if (leg == 0) {
+                        out_settle = settled_since - leg_start;
+                        leg = 1;
+                        leg_start = now;
+                        settled_since = 0;
+                        if (pid_cal_lat) lat_prev = lat_err - lat_dist;
+                        else ang_prev = ang_err - ang_dist;
+                    } else {
+                        back_settle = settled_since - leg_start;
+                        done = true;
+                    }
+                }
+            } else {
+                settled_since = 0;
+            }
+            if (now - leg_start > 4000) {
+                if (leg == 0) out_settle = -1;
+                else back_settle = -1;
+                done = true;
+            }
+            if (done) {
+                testing = false;
+                last_overshoot = overshoot;
+                chassis.arcade(0, 0, true);
+                printf("lat kP %.2f kD %.2f | ang kP %.2f kD %.2f | out %.0f ms back %.0f ms overshoot %.2f\n",
+                    latkP, latkD, angkP, angkD, out_settle, back_settle, last_overshoot);
+            }
+        }
+
+        pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
+        pros::lcd::print(1, "Theta: %.2f", pose.theta);
+        pros::lcd::print(2, "Mode: %s %s", pid_cal_lat ? "LAT 24in out+back" : "ANG 90deg out+back",
+                         testing ? (leg == 0 ? "(out)" : "(back)") : "");
+        pros::lcd::print(3, "Error: %.2f", pid_cal_lat ? lat_err : ang_err);
+        pros::lcd::print(4, "Lat kP %.2f kD %.2f", latkP, latkD);
+        pros::lcd::print(5, "Ang kP %.2f kD %.2f", angkP, angkD);
+        pros::lcd::print(6, "Out %s  Back %s",
+                         out_settle < 0 ? "TIMEOUT" : std::to_string((int)out_settle).c_str(),
+                         back_settle < 0 ? "TIMEOUT" : std::to_string((int)back_settle).c_str());
+        pros::lcd::print(7, "Overshoot %.2f", last_overshoot);
+
+        if (dirty && now - last_print >= 60) {
+            controller.print(0, 0, "%s %s: %.2f      ",
+                             pid_cal_lat ? "Lat" : "Ang",
+                             pid_cal_kp ? "kP" : "kD",
+                             pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD));
+            last_print = now;
+            dirty = false;
+        }
+
+        pros::delay(10);
+    }
+}
 
 
 void opcontrol() {
     // loop forever
-    bool intakeon = false;
-    bool intakereverse = false;
+    // bool intakeon = false;
+    // bool intakereverse = false;
     
-    while (true) {
-        // get left y and right x positions
+    // while (true) {
+    //     // get left y and right x positions
 
-        int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-        int left1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-        int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-        int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-        // move the robot
-        int forward = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+    //     int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+    //     int left1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+    //     int right2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+    //     int right1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    //     // move the robot
+    //     int forward = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
 
-        int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+    //     int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-        int left = forward - turn;
-        int right = forward + turn;
+    //     int left = forward - turn;
+    //     int right = forward + turn;
 
-        left_motors.move(left);
-        right_motors.move(right);
+    //     left_motors.move(left);
+    //     right_motors.move(right);
 
            
-        //cascade
-        if (left1 == 1 && left2 == 0) {
-            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
-            cascade_motors.move(75);
-        } else if (left2 == 1 && left1 == 0) {
-            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
-            cascade_motors.brake();
-        } else {
-            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
-            cascade_motors.move(0);
-        }
+    //     //cascade
+    //     if (left1 == 1 && left2 == 0) {
+    //         cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+    //         cascade_motors.move(75);
+    //     } else if (left2 == 1 && left1 == 0) {
+    //         cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
+    //         cascade_motors.brake();
+    //     } else {
+    //         cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+    //         cascade_motors.move(0);
+    //     }
 
-        //intake
-        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
-            intakeon = !intakeon;
-        }
+    //     //intake
+    //     if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
+    //         intakeon = !intakeon;
+    //     }
 
-        intakereverse = right1 == 1;
+    //     intakereverse = right1 == 1;
 
-        intake_motor.move(intakereverse ? -100 : (intakeon ? 100 : 0));
-        // delay to save resources
-        pros::delay(25);
-    }
+    //     intake_motor.move(intakereverse ? -100 : (intakeon ? 100 : 0));
+    //     // delay to save resources
+    //     pros::delay(25);
+    // }
+    pidcal();
 }
 
 //pid calibration func 
-void pidcal(){
-    bool pid_cal_lat = false;
-        bool pid_cal_kp = true;
-        double angkP = 2;
-        double angkD = 10;
-        double latkP = 2;
-        double latkD = 10;
-
-        bool testing = false;
-        bool dirty = true;
-        uint32_t last_print = 0;
-        uint32_t test_start = 0;
-        uint32_t settled_since = 0;
-        lemlib::Pose start(0, 0, 0);
-        double lat_prev = 0;
-        double ang_prev = 0;
-        double overshoot = 0;
-        double last_settle = 0;
-        double last_overshoot = 0;
-
-        auto wrap = [](double e) {
-            while (e > 180) e -= 360;
-            while (e < -180) e += 360;
-            return e;
-        };
-        auto clamp127 = [](double v) { return std::clamp(v, -127.0, 127.0); };
-
-        while (true) {
-            const lemlib::Pose pose = chassis.getPose();
-            const uint32_t now = pros::millis();
-
-            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT) && !testing) {
-                pid_cal_lat = !pid_cal_lat;
-                dirty = true;
-            }
-            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
-                pid_cal_kp = !pid_cal_kp;
-                dirty = true;
-            }
-            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP) ||
-                controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-                const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
-                double& gain = pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD);
-                gain = std::max(0.0, gain + dir * (pid_cal_kp ? 0.5 : 1.0));
-                dirty = true;
-            }
-            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {
-                testing = true;
-                start = pose;
-                test_start = now;
-                settled_since = 0;
-                overshoot = 0;
-                lat_prev = pid_cal_lat ? 24 : 0;
-                ang_prev = pid_cal_lat ? 0 : 90;
-            }
-            if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && testing) {
-                testing = false;
-                chassis.arcade(0, 0, true);
-            }
-
-            double lat_err = 0;
-            double ang_err = 0;
-
-            if (testing) {
-                const double h = start.theta * M_PI / 180.0;
-                if (pid_cal_lat) {
-                    const double tx = start.x + 24 * std::sin(h);
-                    const double ty = start.y + 24 * std::cos(h);
-                    lat_err = (tx - pose.x) * std::sin(h) + (ty - pose.y) * std::cos(h);
-                    ang_err = wrap(start.theta - pose.theta);
-                } else {
-                    ang_err = wrap(start.theta + 90 - pose.theta);
-                }
-
-                const double fwd = pid_cal_lat ? clamp127(latkP * lat_err + latkD * (lat_err - lat_prev)) : 0;
-                const double turn = clamp127(angkP * ang_err + angkD * (ang_err - ang_prev));
-                lat_prev = lat_err;
-                ang_prev = ang_err;
-                chassis.arcade(fwd, turn, true);
-
-                const double primary = pid_cal_lat ? lat_err : ang_err;
-                overshoot = std::max(overshoot, -primary);
-
-                bool done = false;
-                if (std::fabs(primary) < 1) {
-                    if (settled_since == 0) settled_since = now;
-                    if (now - settled_since >= 100) {
-                        last_settle = settled_since - test_start;
-                        done = true;
-                    }
-                } else {
-                    settled_since = 0;
-                }
-                if (now - test_start > 4000) {
-                    last_settle = -1;
-                    done = true;
-                }
-                if (done) {
-                    testing = false;
-                    last_overshoot = overshoot;
-                    chassis.arcade(0, 0, true);
-                    printf("lat kP %.2f kD %.2f | ang kP %.2f kD %.2f | settle %.0f ms overshoot %.2f\n",
-                        latkP, latkD, angkP, angkD, last_settle, last_overshoot);
-                }
-            }
-
-            pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
-            pros::lcd::print(1, "Theta: %.2f", pose.theta);
-            pros::lcd::print(2, "Mode: %s %s", pid_cal_lat ? "LATERAL 24in" : "ANGULAR 90deg", testing ? "(running)" : "");
-            pros::lcd::print(3, "Error: %.2f", pid_cal_lat ? lat_err : ang_err);
-            pros::lcd::print(4, "Lat kP %.2f kD %.2f", latkP, latkD);
-            pros::lcd::print(5, "Ang kP %.2f kD %.2f", angkP, angkD);
-            if (last_settle < 0) {
-                pros::lcd::print(6, "Last: TIMEOUT  overshoot %.2f", last_overshoot);
-            } else {
-                pros::lcd::print(6, "Last: %.0f ms  overshoot %.2f", last_settle, last_overshoot);
-            }
-
-            if (dirty && now - last_print >= 60) {
-                controller.print(0, 0, "%s %s: %.2f      ",
-                                pid_cal_lat ? "Lat" : "Ang",
-                                pid_cal_kp ? "kP" : "kD",
-                                pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD));
-                last_print = now;
-                dirty = false;
-            }
-
-            pros::delay(10);
-        }
-}
-
