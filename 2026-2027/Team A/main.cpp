@@ -15,7 +15,7 @@ lemlib::Drivetrain drivetrain(&left_motors, // left motor group
                               2 // horizontal drift is 2 (for now)
 );//wheelbase is 10"
 
-//imu port on port 20
+//imu port on port 5
 pros::Imu imu(5);
 
 //old encoder code
