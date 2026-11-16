@@ -14,14 +14,14 @@ bool pid_cal_driving = false;
 bool pid_cal_lat = true; //true lat ang false
 
 //drivetrain motor groups
-pros::Motor front_left_motor(-12, pros::E_MOTOR_GEAR_BLUE); 
-pros::Motor back_left_motor(-11, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor front_left_motor(12, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor back_left_motor(11, pros::E_MOTOR_GEAR_BLUE); 
 
-pros::Motor front_right_motor(19, pros::E_MOTOR_GEAR_BLUE); 
-pros::Motor back_right_motor(20, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor front_right_motor(-19, pros::E_MOTOR_GEAR_BLUE); 
+pros::Motor back_right_motor(-20, pros::E_MOTOR_GEAR_BLUE); 
 
-pros::MotorGroup left_motors({front_left_motor, front_right_motor}); // left motors on ports 1 (Front reversed), 2 (5.5W forwards), and 3 (Back reversed)
-pros::MotorGroup right_motors({front_left_motor, front_right_motor}); // right motors on ports 4 (forwards), 5 (5.5W reversed), and 6 (Back forwards)
+pros::MotorGroup left_motors({front_left_motor, back_left_motor}); // left motors on ports 1 (Front reversed), 2 (5.5W forwards), and 3 (Back reversed)
+pros::MotorGroup right_motors({front_right_motor, back_right_motor}); // right motors on ports 4 (forwards), 5 (5.5W reversed), and 6 (Back forwards)
 
 //Cascade motor group
 pros::Motor left_cascade_motor(-2, pros::E_MOTOR_GEAR_BLUE); 
@@ -288,8 +288,6 @@ void opcontrol() {
     
     while (true) {
         // get left y and right x positions
-        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
         int left2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
         int left1 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
@@ -300,8 +298,8 @@ void opcontrol() {
 
         int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-        int left = forward + turn;
-        int right = forward - turn;
+        int left = forward - turn;
+        int right = forward + turn;
 
         left_motors.move(left);
         right_motors.move(right);
@@ -314,7 +312,10 @@ void opcontrol() {
         } else if (left2 == 1 && left1 == 0) {
             cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_COAST);
             cascade_motors.brake();
-        } 
+        } else {
+            cascade_motors.set_brake_modes(pros::E_MOTOR_BRAKE_HOLD);
+            cascade_motors.move(0);
+        }
 
         //intake
         if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
