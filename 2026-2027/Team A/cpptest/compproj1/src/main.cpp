@@ -74,11 +74,7 @@ void initialize() {
 
 
 //vertical tracking wheel
-<<<<<<< HEAD
-//lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.75); 
-=======
-lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.75); //NEED TO CONFIGURE DISTANCE!@!!
->>>>>>> f43ed7ad1bb23f7e51339234fe95a2f69d6d93af
+lemlib::TrackingWheel vertical_tracking_wheel(&vertical_sensor, lemlib::Omniwheel::NEW_2, -0.75); 
 
 //odom settings
 lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel 1, set to null
