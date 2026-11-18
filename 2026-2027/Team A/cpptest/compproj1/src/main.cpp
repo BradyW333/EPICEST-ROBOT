@@ -331,16 +331,7 @@ void pidcal() {
             dirty = true;
         }
         if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {
-            testing = true;
-            leg = 0;
-            start = pose;
-            leg_start = now;
-            settled_since = 0;
-            overshoot = 0;
-            out_settle = 0;
-            back_settle = 0;
-            lat_prev = pid_cal_lat ? lat_dist : 0;
-            ang_prev = pid_cal_lat ? 0 : ang_dist;
+            
         }
         if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && testing) {
             testing = false;
@@ -351,56 +342,7 @@ void pidcal() {
         double ang_err = 0;
 
         if (testing) {
-            const double h = start.theta * M_PI / 180.0;
-            if (pid_cal_lat) {
-                const double travelled = (pose.x - start.x) * std::sin(h) + (pose.y - start.y) * std::cos(h);
-                lat_err = (leg == 0 ? lat_dist : 0) - travelled;
-                ang_err = wrap(start.theta - pose.theta);
-            } else {
-                ang_err = wrap(start.theta + (leg == 0 ? ang_dist : 0) - pose.theta);
-            }
-
-            const double fwd = pid_cal_lat ? clamp127(latkP * lat_err + latkD * (lat_err - lat_prev)) : 0;
-            const double turn = clamp127(angkP * ang_err + angkD * (ang_err - ang_prev));
-            lat_prev = lat_err;
-            ang_prev = ang_err;
-            chassis.arcade(fwd, turn, true);
-
-            const double primary = pid_cal_lat ? lat_err : ang_err;
-            const double leg_dir = leg == 0 ? 1 : -1;
-            overshoot = std::max(overshoot, -primary * leg_dir);
-
-            bool done = false;
-            if (std::fabs(primary) < 1) {
-                if (settled_since == 0) settled_since = now;
-                if (now - settled_since >= 100) {
-                    if (leg == 0) {
-                        out_settle = settled_since - leg_start;
-                        leg = 1;
-                        leg_start = now;
-                        settled_since = 0;
-                        if (pid_cal_lat) lat_prev = lat_err - lat_dist;
-                        else ang_prev = ang_err - ang_dist;
-                    } else {
-                        back_settle = settled_since - leg_start;
-                        done = true;
-                    }
-                }
-            } else {
-                settled_since = 0;
-            }
-            if (now - leg_start > 4000) {
-                if (leg == 0) out_settle = -1;
-                else back_settle = -1;
-                done = true;
-            }
-            if (done) {
-                testing = false;
-                last_overshoot = overshoot;
-                chassis.arcade(0, 0, true);
-                printf("lat kP %.2f kD %.2f | ang kP %.2f kD %.2f | out %.0f ms back %.0f ms overshoot %.2f\n",
-                    latkP, latkD, angkP, angkD, out_settle, back_settle, last_overshoot);
-            }
+            
         }
 
         pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
