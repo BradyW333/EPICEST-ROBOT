@@ -280,10 +280,145 @@ void autonomous() {
  */
 
 
+//pid calibration func 
+void pidcal(){
+    bool pid_cal_lat = false;
+    bool pid_cal_ang = false;
+    bool pid_cal_k = true;
+    double angkP = 2;
+    double angkD = 10;
+    double latkP = 2;
+    double latkD = 10;
 
+    const double lat_dist = 24;
+    const double ang_dist = 90;
+
+    bool calibrateMode = false;
+    bool currentlyCalibrating = false;
+    int leg = 0;
+    uint32_t last_print = 0;
+    uint32_t leg_start = 0;
+    uint32_t settled_since = 0;
+    lemlib::Pose start(0, 0, 0);
+    double lat_prev = 0;
+    double ang_prev = 0;
+    double overshoot = 0;
+    double out_settle = 0;
+    double back_settle = 0;
+    double last_overshoot = 0;
+
+    auto wrap = [](double theta) {
+        while (theta > 180) theta -= 360;
+        while (theta < -180) theta += 360;
+        return theta;
+    };
+    auto clamp127 = [](double v) { return std::clamp(v, -127.0, 127.0); };
+
+    while (true) {
+        const lemlib::Pose pose = chassis.getPose();
+        const uint32_t now = pros::millis();
+        //Intiate calibration mode
+        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)){
+            calibrateMode = !calibrateMode;
+            controller.rumble(".");
+        }
+        //Lateral calibration
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT) && calibrateMode) {
+            pid_cal_lat = !pid_cal_lat;
+        }
+        //Angular calibration
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT) && calibrateMode) {
+            pid_cal_ang = !pid_cal_ang;
+        }
+        //kP or kD calibration
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A) && calibrateMode) {
+            pid_cal_k = !pid_cal_k;
+        }
+        //Adjust kp or KD values
+        if ((controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP) ||
+            controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) && calibrateMode) {
+            const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
+            double& gain = calibrateMode ? (pid_cal_lat ? latkP : latkD) : (pid_cal_ang ? angkP : angkD);
+            gain = std::max(0.0, gain + dir * 0.5);
+        }
+        //Start calibration
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && calibrateMode && !currentlyCalibrating) {
+            currentlyCalibrating = true;
+            start = pose;
+            leg_start = now;
+            settled_since = 0;
+            overshoot = 0;
+            lat_prev = pid_cal_k ? latkP : latkD;
+            ang_prev = pid_cal_k ? angkP : angkD;
+        }
+
+        double lat_err = 0;
+        double ang_err = 0;
+        //Robot is currently calibrating
+        if(currentlyCalibrating){
+            const uint32_t test_start = now;
+            while(currentlyCalibrating){
+                const double h = start.theta * M_PI / 180.0;
+                if (pid_cal_lat) {
+                    const double tx = start.x + 24 * std::sin(h);                    
+                    const double ty = start.y + 24 * std::cos(h);                    
+                    lat_err = (tx - pose.x) * std::sin(h) + (ty - pose.y) * std::cos(h);
+                } 
+                else if(pid_cal_ang){ 
+                    ang_err = wrap(start.theta + 90 - pose.theta);
+                }
+                
+                
+                const double fwd = pid_cal_lat ? clamp127(latkP * lat_err + latkD * (lat_err - lat_prev)) : 0;
+                const double turn = pid_cal_ang ? clamp127(angkP * ang_err + angkD * (ang_err - ang_prev)) : 0;
+                lat_prev = lat_err;
+                ang_prev = ang_err;
+                chassis.arcade(fwd, turn, true); 
+
+                const double primary = pid_cal_lat ? lat_err : ang_err;
+                overshoot = std::max(overshoot, -primary);
+
+                
+                if (pros::millis() - test_start > 4000) {
+                    currentlyCalibrating = false;
+                    last_overshoot = overshoot;
+                    chassis.arcade(0, 0, true);    
+                }
+            }
+        }
+        //Stop calibration completely
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && calibrateMode && !currentlyCalibrating) {
+            calibrateMode = false;
+            chassis.arcade(0, 0, true);
+        }
+        //Print values to the brain screen
+        pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
+        pros::lcd::print(1, "Theta: %.2f", pose.theta);
+        pros::lcd::print(2, "Mode: %s %s", pid_cal_lat ? "LAT 24in out+back" : "ANG 90deg out+back",
+                         calibrateMode ? (leg == 0 ? "(out)" : "(back)") : "");
+        //pros::lcd::print(3, "Error: %.2f", pid_cal_lat ? lat_err : ang_err);
+        pros::lcd::print(4, "Lat kP %.2f kD %.2f", latkP, latkD);
+        pros::lcd::print(5, "Ang kP %.2f kD %.2f", angkP, angkD);
+        pros::lcd::print(6, "Out %s  Back %s",
+                         out_settle < 0 ? "TIMEOUT" : std::to_string((int)out_settle).c_str(),
+                         back_settle < 0 ? "TIMEOUT" : std::to_string((int)back_settle).c_str());
+        pros::lcd::print(7, "Overshoot %.2f", last_overshoot);
+        //Print values to the controller screen
+        if (calibrateMode && now - last_print >= 60) {
+            controller.print(0, 0, "%s %s: %.2f",
+                             pid_cal_lat ? "Lat" : "Ang",
+                             pid_cal_k ? "kP" : "kD",
+                             pid_cal_lat ? (pid_cal_k ? latkP : latkD) : (pid_cal_k ? angkP : angkD));
+            last_print = now;
+        }
+        //DO NOT DELETE
+        pros::delay(10);
+    }
+}
 
 void opcontrol() {
     // loop forever
+    /*
     while (true) {
         int forward = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
         int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
@@ -293,10 +428,11 @@ void opcontrol() {
         right_motors.move(right);
         pros::delay(20);
     }
+    */
+    pidcal();   
     
 }
-
-//pid calibration func 
+/*
 void pidcal(){
     bool pid_cal_lat = false;
         bool pid_cal_kp = true;
@@ -427,4 +563,4 @@ void pidcal(){
             pros::delay(10);
         }
 }
-
+*/
