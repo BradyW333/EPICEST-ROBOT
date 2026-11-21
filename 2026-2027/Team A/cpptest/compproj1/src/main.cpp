@@ -1,6 +1,7 @@
 #include "main.h"
 #include "lemlib/api.hpp" // IWYU pragma: keep
 #include "lemlib/chassis/trackingWheel.hpp"
+#include "lemlib/pose.hpp"
 #include "pros/llemu.hpp"
 #include "pros/misc.h"
 #include "pros/misc.hpp"
@@ -87,7 +88,7 @@ lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel
 // lateral PID controller
 lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
                                               0, // integral gain (kI)
-                                              3, // derivative gain (kD)
+                                              6, // derivative gain (kD)
                                               0, // anti windup
                                               0, // small error range, in inches
                                               0, // small error range timeout, in milliseconds
@@ -257,9 +258,8 @@ void competition_initialize() {}
 void autonomous() {
 	//tune angular controller
     // set position to x:0, y:0, heading:0
-    chassis.setPose(0, 0, 0);
     // turn to face heading 90 with a very long timeout
-    chassis.turnToHeading(90, 100000);
+
 
 	
 }
@@ -280,93 +280,11 @@ void autonomous() {
 
 
 void pidcal() {
-    bool pid_cal_lat = false;
-    bool pid_cal_kp = true;
-    double angkP = 2;
-    double angkD = 10;
-    double latkP = 2;
-    double latkD = 10;
-
-    const double lat_dist = 24;
-    const double ang_dist = 90;
-
-    bool testing = false;
-    int leg = 0;
-    bool dirty = true;
-    uint32_t last_print = 0;
-    uint32_t leg_start = 0;
-    uint32_t settled_since = 0;
-    lemlib::Pose start(0, 0, 0);
-    double lat_prev = 0;
-    double ang_prev = 0;
-    double overshoot = 0;
-    double out_settle = 0;
-    double back_settle = 0;
-    double last_overshoot = 0;
-
-    auto wrap = [](double e) {
-        while (e > 180) e -= 360;
-        while (e < -180) e += 360;
-        return e;
-    };
-    auto clamp127 = [](double v) { return std::clamp(v, -127.0, 127.0); };
-
-    while (true) {
-        const lemlib::Pose pose = chassis.getPose();
-        const uint32_t now = pros::millis();
-
-        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT) && !testing) {
-            pid_cal_lat = !pid_cal_lat;
-            dirty = true;
+    while(true){
+        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)){
+            chassis.setPose(0,0,0);
+            chassis.moveToPose(0, 10, 0,40000);
         }
-        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
-            pid_cal_kp = !pid_cal_kp;
-            dirty = true;
-        }
-        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP) ||
-            controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-            const double dir = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP) ? 1 : -1;
-            double& gain = pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD);
-            gain = std::max(0.0, gain + dir * (pid_cal_kp ? 0.5 : 1.0));
-            dirty = true;
-        }
-        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) && !testing) {
-            
-        }
-        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B) && testing) {
-            testing = false;
-            chassis.arcade(0, 0, true);
-        }
-
-        double lat_err = 0;
-        double ang_err = 0;
-
-        if (testing) {
-            
-        }
-
-        pros::lcd::print(0, "X: %.2f  Y: %.2f", pose.x, pose.y);
-        pros::lcd::print(1, "Theta: %.2f", pose.theta);
-        pros::lcd::print(2, "Mode: %s %s", pid_cal_lat ? "LAT 24in out+back" : "ANG 90deg out+back",
-                         testing ? (leg == 0 ? "(out)" : "(back)") : "");
-        pros::lcd::print(3, "Error: %.2f", pid_cal_lat ? lat_err : ang_err);
-        pros::lcd::print(4, "Lat kP %.2f kD %.2f", latkP, latkD);
-        pros::lcd::print(5, "Ang kP %.2f kD %.2f", angkP, angkD);
-        pros::lcd::print(6, "Out %s  Back %s",
-                         out_settle < 0 ? "TIMEOUT" : std::to_string((int)out_settle).c_str(),
-                         back_settle < 0 ? "TIMEOUT" : std::to_string((int)back_settle).c_str());
-        pros::lcd::print(7, "Overshoot %.2f", last_overshoot);
-
-        if (dirty && now - last_print >= 60) {
-            controller.print(0, 0, "%s %s: %.2f      ",
-                             pid_cal_lat ? "Lat" : "Ang",
-                             pid_cal_kp ? "kP" : "kD",
-                             pid_cal_lat ? (pid_cal_kp ? latkP : latkD) : (pid_cal_kp ? angkP : angkD));
-            last_print = now;
-            dirty = false;
-        }
-
-        pros::delay(10);
     }
 }
 
